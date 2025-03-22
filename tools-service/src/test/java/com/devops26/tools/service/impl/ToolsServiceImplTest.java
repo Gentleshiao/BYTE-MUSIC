@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.devops26.tools.util.OssUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,12 +24,11 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.devops26.tools.exception.TuneIslandException;
-import com.devops26.tools.util.ObsUtil;
 
 class ToolsServiceImplTest {
 
     @Mock
-    private ObsUtil obsUtil;
+    private OssUtil obsUtil;
 
     @InjectMocks
     private ToolsServiceImpl toolsService;
