@@ -39,5 +39,5 @@ aliyun:
   oss:
     endpoint: oss-cn-hangzhou.aliyuncs.com
     accessKeyId:
-    accessKeySecret:
+    accessKeySecret: Zomsduo8Q0hKo1FfpgaF9Sr4esn3es
     bucketName:

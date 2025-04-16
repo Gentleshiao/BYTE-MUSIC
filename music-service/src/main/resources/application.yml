@@ -41,5 +41,5 @@ eureka:
 
 llm:
   api:
-    url: ${LLM_API_URL:https://api.openai.com/v1/chat/completions}
-    key: ${LLM_API_KEY:your-api-key-here}
+    url: ${LLM_API_URL:https://api.deepseek.com/v1/chat/completions}
+    key: ${LLM_API_KEY:}

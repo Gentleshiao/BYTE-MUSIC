@@ -41,13 +41,21 @@ public class LLMRecommendationEngine {
     public List<Song> recommendSongsForUser(User user, List<Song> allSongs, int numRecommendations) {
         try {
             String prompt = buildRecommendationPrompt(user, allSongs, numRecommendations);
-            List<Integer> recommendedSongIds = callLLMAPI(prompt, numRecommendations);
+            log.info("========== Recommendation Process Begin ==========");
+            log.info("Sending prompt to LLM: \n{}", prompt);
             
-            return recommendedSongIds.stream()
+            List<Integer> recommendedSongIds = callLLMAPI(prompt, numRecommendations);
+            log.info("Parsed song IDs from LLM response: {}", recommendedSongIds);
+            
+            List<Song> recommendedSongs = recommendedSongIds.stream()
                 .map(songRepository::findBySongId)
                 .filter(Objects::nonNull)
-                .limit(numRecommendations)
                 .collect(Collectors.toList());
+                
+            log.info("Final recommended songs count: {}", recommendedSongs.size());
+            log.info("========== Recommendation Process End ============");
+            
+            return recommendedSongs;
         } catch (Exception e) {
             log.error("Error generating LLM recommendations for user {}: {}", 
                     user.getUserId(), e.getMessage());
@@ -69,7 +77,7 @@ public class LLMRecommendationEngine {
                 .map(songId -> songRepository.findBySongId(songId))
                 .filter(Objects::nonNull)
                 .forEach(song -> prompt.append("- ").append(song.getName())
-                    .append(" (").append(song.getSinger()).append(")\n"));
+                    .append("(").append(song.getSinger()).append(")\n"));
         }
         
         // 添加用户喜欢的歌曲
@@ -81,7 +89,7 @@ public class LLMRecommendationEngine {
                 .map(songRepository::findBySongId)
                 .filter(Objects::nonNull)
                 .forEach(song -> prompt.append("- ").append(song.getName())
-                    .append(" (").append(song.getSinger()).append(")\n"));
+                    .append("(").append(song.getSinger()).append(")\n"));
         }
         
         // 添加用户评分信息
@@ -91,7 +99,7 @@ public class LLMRecommendationEngine {
                     song.getRateUserList().contains(user.getUserId()))
             .limit(10)
             .forEach(song -> prompt.append("- ").append(song.getName())
-                .append(" (").append(song.getSinger()).append(") - 评分：")
+                .append("(").append(song.getSinger()).append(") - 评分：")
                 .append(song.getRate()).append("\n"));
         
         // 添加歌曲库信息
@@ -99,16 +107,20 @@ public class LLMRecommendationEngine {
         allSongs.stream()
             .limit(50)
             .forEach(song -> {
-                prompt.append("- ").append(song.getName())
-                    .append(" (").append(song.getSinger()).append(")")
-                    .append(" 标签：").append(getTagsString(song.getTags()))
-                    .append(" 播放量：").append(song.getPlayAmount())
-                    .append(" 评分：").append(song.getRate())
+                prompt.append("- 歌曲id: ").append(song.getSongId())
+                    .append("；歌名(歌手): ").append(song.getName())
+                    .append("(").append(song.getSinger()).append(")")
+                    .append("；标签：").append(getTagsString(song.getTags()))
+                    .append("；播放量：").append(song.getPlayAmount())
+                    .append("；评分：").append(song.getRate())
                     .append("\n");
             });
         
-        prompt.append("\n请根据用户的听歌历史、喜好和评分，从歌曲库中选择").append(numRecommendations)
-            .append("首最合适的歌曲推荐给用户。返回格式为歌曲ID列表，用逗号分隔。");
+        prompt.append("\n请根据用户的听歌历史、喜好和评分，从歌曲库中选择歌曲，按照推荐顺序将歌曲库中的歌曲id推荐给用户。")
+              .append("如果可用歌曲数量不足").append(numRecommendations).append("首，")
+              .append("请仅返回可用的歌曲ID即可。\n")
+              .append("严格按照以下格式返回：推荐歌曲ID1,推荐歌曲ID2,推荐歌曲ID3...\n")
+              .append("示例格式：15,2,4,1");
         
         return prompt.toString();
     }
@@ -118,8 +130,12 @@ public class LLMRecommendationEngine {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", "Bearer " + llmApiKey);
         
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "user", "content", prompt));
+        
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("prompt", prompt);
+        requestBody.put("messages", messages);
+        requestBody.put("model", "deepseek-chat");
         requestBody.put("max_tokens", 100);
         requestBody.put("temperature", 0.7);
         
@@ -129,12 +145,69 @@ public class LLMRecommendationEngine {
             Map<String, Object> response = restTemplate.postForObject(
                 llmApiUrl, request, Map.class);
             
-            String content = (String) response.get("choices");
-            return Arrays.stream(content.split(","))
-                .map(String::trim)
-                .map(Integer::parseInt)
-                .limit(numRecommendations)
-                .collect(Collectors.toList());
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
+            if (choices == null || choices.isEmpty()) {
+                throw new RuntimeException("No response from LLM API");
+            }
+
+            Map<String, Object> choice = choices.get(0);
+            Map<String, String> message = (Map<String, String>) choice.get("message");
+            String content = message.get("content");
+
+            log.info("========== LLM API Response Begin ==========");
+            log.info("Raw response content:");
+            log.info("{}", content);
+            log.info("========== LLM API Response End ============");
+
+            List<Integer> result = new ArrayList<>();
+            
+            String[] parts = content.split("[,，]");
+            
+            for (String part : parts) {
+                try {
+                    String cleaned = part.trim().replaceAll("[^0-9]", "");
+                    if (!cleaned.isEmpty() && cleaned.length() <= 8) {
+                        int id = Integer.parseInt(cleaned);
+                        if (id > 0) {
+                            result.add(id);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    log.debug("Skipping invalid number: {}", part);
+                }
+            }
+            
+            if (result.isEmpty()) {
+                List<String> numbers = new ArrayList<>();
+                StringBuilder current = new StringBuilder();
+                
+                for (char c : content.toCharArray()) {
+                    if (Character.isDigit(c)) {
+                        current.append(c);
+                    } else if (current.length() > 0) {
+                        if (current.length() <= 8) {
+                            numbers.add(current.toString());
+                        }
+                        current = new StringBuilder();
+                    }
+                }
+                if (current.length() > 0 && current.length() <= 8) {
+                    numbers.add(current.toString());
+                }
+                
+                result = numbers.stream()
+                    .map(Integer::parseInt)
+                    .filter(id -> id > 0)
+                    .collect(Collectors.toList());
+            }
+
+            if (result.isEmpty()) {
+                throw new RuntimeException("No valid song IDs found in LLM response");
+            }
+
+            return result;
+
         } catch (Exception e) {
             log.error("Error calling LLM API: {}", e.getMessage());
             throw e;
