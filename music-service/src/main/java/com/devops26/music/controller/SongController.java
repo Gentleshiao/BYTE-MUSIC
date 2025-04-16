@@ -104,4 +104,10 @@ public class SongController {
         return ResultVO.buildSuccess(recommendations);
     }
 
+    @GetMapping("/llm-recommendations")
+    public ResultVO<List<Song>> getLLMRecommendations(@RequestParam(name = "userId") Integer userId) {
+        List<Song> recommendations = songService.getLLMRecommendedSongs(userId, 10);
+        return ResultVO.buildSuccess(recommendations);
+    }
+
 }

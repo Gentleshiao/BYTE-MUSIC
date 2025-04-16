@@ -38,3 +38,8 @@ eureka:
       defaultZone: ${EUREKA_DEFAULTZONE:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
+
+llm:
+  api:
+    url: ${LLM_API_URL:https://api.openai.com/v1/chat/completions}
+    key: ${LLM_API_KEY:your-api-key-here}

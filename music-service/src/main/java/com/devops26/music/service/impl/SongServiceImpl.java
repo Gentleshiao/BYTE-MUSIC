@@ -26,6 +26,8 @@ import com.devops26.music.service.SongService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.devops26.music.util.LLMRecommendationEngine;
+
 @Service
 @Slf4j
 public class SongServiceImpl implements SongService {
@@ -40,6 +42,9 @@ public class SongServiceImpl implements SongService {
 
     @Autowired
     private MLRecommenderUtil mlRecommenderUtil;
+
+    @Autowired
+    private LLMRecommendationEngine llmRecommendationEngine;
 
     @Autowired
     private SongRepository songRepository;
@@ -288,6 +293,15 @@ public class SongServiceImpl implements SongService {
                 .filter(song -> song != null)
                 .limit(numRecommendations)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Song> getLLMRecommendedSongs(Integer userId, Integer numRecommendations) {
+        User user = userFeign.getUserById(userId).getResult();
+        List<Song> allSongs = songRepository.findAll();
+        
+        return llmRecommendationEngine.recommendSongsForUser(user, allSongs, numRecommendations);
     }
 
     private void updateSongRating(Song song, Double rate, Integer userId) {

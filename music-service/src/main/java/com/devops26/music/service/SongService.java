@@ -22,7 +22,11 @@ public interface SongService {
     Boolean cancelLikeSong(Integer songId);
     List<Song> getRecommendedSongs(Integer userId, Integer numRecommendations);
     void trainRecommendationModel();
+    List<Song> getLLMRecommendedSongs(Integer userId, Integer numRecommendations);
     default List<Song> getRecommendedSongs(Integer userId) {
         return getRecommendedSongs(userId, 10);
+    }
+    default List<Song> getLLMRecommendedSongs(Integer userId) {
+        return getLLMRecommendedSongs(userId, 10);
     }
 }
